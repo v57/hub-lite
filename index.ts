@@ -3,6 +3,7 @@ import { Server, type Request, type Response, json } from './server'
 const defaultHubPort = Number(Bun.env.HUBPORT ?? 1997)
 type Socket = ServerWebSocket<Connection>
 
+let requests = 0
 export class Hub {
   services = new ObjectMap<string, Services>()
   server: BunServer
@@ -11,6 +12,7 @@ export class Hub {
   constructor(port: number = defaultHubPort) {
     this.server = new Server<Connection>(port, req => ({
       services: [],
+      requests: 0,
     }))
       .connected(ws => this.connected(ws))
       .disconnected(ws => this.disconnected(ws))
@@ -23,12 +25,21 @@ export class Hub {
     ws.data.services.forEach(s => this.services.get(s)?.remove(ws))
   }
   request(ws: Socket, request: Request) {
+    requests += 1
     const { path, body } = request
     switch (path) {
       case 'hub/service/add':
         ws.data.services = ws.data.services.concat(body)
         this.addServices(ws, body)
         ws.send(json({ id: request.id }))
+        break
+      case 'hub/status':
+        ws.send(
+          json({
+            id: request.id,
+            body: { requests, services: this.services.map(a => a.status) },
+          }),
+        )
         break
       default:
         const serviceId = path.split('/')[0]
@@ -38,6 +49,9 @@ export class Hub {
         this.pending.set(id, serviceId)
         service.send(id, request, ws)
     }
+  }
+  stats() {
+    this.services.map(a => a)
   }
   response(response: Response) {
     const serviceId = this.pending.get(response.id)
@@ -49,7 +63,7 @@ export class Hub {
     services.forEach(s => {
       let service = this.services.get(s)
       if (!service) {
-        service = new Services()
+        service = new Services(s)
         this.services.set(s, service)
       }
       service.add(ws)
@@ -58,9 +72,14 @@ export class Hub {
   }
 }
 class Services {
+  name: string
+  requests = 0
   services: Socket[] = []
   index = 0
   pending = new ObjectMap<number, PendingSocketRequest>()
+  constructor(name: string) {
+    this.name = name
+  }
   add(ws: Socket) {
     this.services.push(ws)
   }
@@ -84,12 +103,18 @@ class Services {
     const pending = this.pending.get(response.id)
     if (!pending) return
     this.pending.delete(response.id)
+    this.requests += 1
+    pending.socket.data.requests += 1
     pending.socket.send(json({ id: pending.request.id, body: response.body, error: response.error }))
+  }
+  get status() {
+    return { name: this.name, services: this.services.length, requests: this.requests }
   }
 }
 
 interface Connection {
   services: string[]
+  requests: number
 }
 
 interface PendingSocketRequest {
