@@ -2,6 +2,9 @@
   "name": "hub-lite",
   "module": "index.ts",
   "type": "module",
+  "scripts": {
+    "start": "bun start.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
