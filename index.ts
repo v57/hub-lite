@@ -1,4 +1,5 @@
 import { Channel, type Sender, ObjectMap } from 'channel/server'
+import { LazyState } from 'channel/more'
 const defaultHubPort = Number(Bun.env.HUBPORT ?? 1997)
 
 interface State {
@@ -11,22 +12,41 @@ export class Hub {
   services = new ObjectMap<string, Services>()
   channel = new Channel<State>()
   constructor(port: number = defaultHubPort) {
+    const statusState = new LazyState(() => ({
+      requests,
+      services: this.services.map(a => a.status),
+    }))
+    const t = this
     this.channel
       .post('hub/service/add', ({ body, state, sender }) => {
         state.services = state.services.concat(body)
         this.addServices(sender, body)
+        statusState.setNeedsUpdate()
       })
       .post('hub/status', () => ({ requests, services: this.services.map(a => a.status) }))
+      .stream('hub/status', () => statusState.makeIterator())
       .postOther(other, async ({ body }, path) => {
         const service = this.services.get(path)
         if (!service) throw 'api not found'
         const sender = service.next()
         if (!sender) throw 'api not found'
         service.requests += 1
+        statusState.setNeedsUpdate()
         return await sender.send(path, body)
+      })
+      .streamOther(other, ({ body }, path) => {
+        const service = this.services.get(path)
+        if (!service) throw 'api not found'
+        const sender = service.next()
+        if (!sender) throw 'api not found'
+        service.requests += 1
+        requests += 1
+        statusState.setNeedsUpdate()
+        return sender.values(path, body)
       })
       .onDisconnect((state, sender) => {
         state.services.forEach(s => this.services.get(s)?.remove(sender))
+        statusState.setNeedsUpdate()
       })
       .listen(port, () => ({
         services: [],
