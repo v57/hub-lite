@@ -48,10 +48,12 @@ export class Hub {
         state.services.forEach(s => this.services.get(s)?.remove(sender))
         statusState.setNeedsUpdate()
       })
-      .listen(port, () => ({
-        services: [],
-        requests: 0,
-      }))
+      .listen(port, {
+        state: () => ({
+          services: [],
+          requests: 0,
+        }),
+      })
   }
   stats() {
     this.services.map(a => a)
