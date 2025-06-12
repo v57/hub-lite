@@ -16,7 +16,7 @@ export class Hub {
       requests,
       services: this.services.map(a => a.status),
     }))
-    const t = this
+    const statusBadges = new LazyState<StatusBadges>(() => this.statusBadges)
     this.channel
       .post('hub/service/add', ({ body, state, sender }) => {
         state.services = state.services.concat(body)
@@ -25,6 +25,7 @@ export class Hub {
       })
       .post('hub/status', () => ({ requests, services: this.services.map(a => a.status) }))
       .stream('hub/status', () => statusState.makeIterator())
+      .stream('hub/status/badges', () => statusBadges.makeIterator())
       .postOther(other, async ({ body }, path) => {
         const service = this.services.get(path)
         if (!service) throw 'api not found'
@@ -69,6 +70,9 @@ export class Hub {
       console.log('Service', s, service.services.length)
     })
   }
+  get statusBadges(): StatusBadges {
+    return { services: this.services.size }
+  }
 }
 
 function other(): boolean {
@@ -98,4 +102,8 @@ class Services {
   get status() {
     return { name: this.name, services: this.services.length, requests: this.requests }
   }
+}
+
+interface StatusBadges {
+  services: number
 }
