@@ -23,7 +23,6 @@ export class Hub {
         this.addServices(sender, body)
         statusState.setNeedsUpdate()
       })
-      .post('hub/status', () => ({ requests, services: this.services.map(a => a.status) }))
       .stream('hub/status', () => statusState.makeIterator())
       .stream('hub/status/badges', () => statusBadges.makeIterator())
       .postOther(other, async ({ body }, path) => {
