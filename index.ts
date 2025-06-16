@@ -18,10 +18,11 @@ export class Hub {
     }))
     const statusBadges = new LazyState<StatusBadges>(() => this.statusBadges)
     this.channel
-      .post('hub/service/add', ({ body, state, sender }) => {
-        state.services = state.services.concat(body)
-        this.addServices(sender, body)
+      .post('hub/service/update', ({ body: { add, remove }, state, sender }) => {
+        if (add && Array.isArray(add)) this.addServices(sender, add)
+        if (remove && Array.isArray(remove)) this.removeServices(sender, remove)
         statusState.setNeedsUpdate()
+        statusBadges.setNeedsUpdate()
       })
       .stream('hub/status', () => statusState.makeIterator())
       .stream('hub/status/badges', () => statusBadges.makeIterator())
@@ -67,6 +68,13 @@ export class Hub {
       }
       service.add(sender)
       console.log('Service', s, service.services.length)
+    })
+  }
+  removeServices(sender: Sender, services: string[]) {
+    services.forEach(s => {
+      let service = this.services.get(s)
+      if (!service) return
+      service.remove(sender)
     })
   }
   get statusBadges(): StatusBadges {
