@@ -1,24 +1,23 @@
 import { Channel, type Sender, ObjectMap } from 'channel/server'
 import { LazyState } from 'channel/more'
-const defaultHubPort = Number(Bun.env.HUBPORT ?? 1997)
+const paddr = (a?: string) => (a ? (isNaN(Number(a)) ? a : Number(a)) : 1997)
 
 interface State {
   services: string[]
   requests: number
 }
-
 let requests = 0
 export class Hub {
   services = new ObjectMap<string, Services>()
   channel = new Channel<State>()
-  constructor(port: number = defaultHubPort) {
+  constructor(address = paddr(Bun.env.HUBLISTEN)) {
     const statusState = new LazyState(() => ({
       requests,
       services: this.services.map(a => a.status),
     }))
     const statusBadges = new LazyState<StatusBadges>(() => this.statusBadges)
     this.channel
-      .post('hub/service/update', ({ body: { add, remove }, state, sender }) => {
+      .post('hub/service/update', ({ body: { add, remove }, sender }) => {
         if (add && Array.isArray(add)) this.addServices(sender, add)
         if (remove && Array.isArray(remove)) this.removeServices(sender, remove)
         statusState.setNeedsUpdate()
@@ -49,7 +48,7 @@ export class Hub {
         state.services.forEach(s => this.services.get(s)?.remove(sender))
         statusState.setNeedsUpdate()
       })
-      .listen(port, {
+      .listen(address, {
         state: () => ({
           services: [],
           requests: 0,
