@@ -23,9 +23,10 @@ export class Hub {
         statusState.setNeedsUpdate()
         statusBadges.setNeedsUpdate()
       })
+      .post('hub/permissions', () => [])
       .stream('hub/status', () => statusState.makeIterator())
       .stream('hub/status/badges', () => statusBadges.makeIterator())
-      .postOther(other, async ({ body }, path) => {
+      .postOther(other, async ({ body, path }) => {
         const service = this.services.get(path)
         if (!service) throw 'api not found'
         const sender = service.next()
@@ -34,7 +35,7 @@ export class Hub {
         statusState.setNeedsUpdate()
         return await sender.send(path, body)
       })
-      .streamOther(other, ({ body }, path) => {
+      .streamOther(other, ({ body, path }) => {
         const service = this.services.get(path)
         if (!service) throw 'api not found'
         const sender = service.next()
