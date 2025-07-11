@@ -50,6 +50,7 @@ export class Hub {
       })
       .onDisconnect((state, sender) => {
         state.services.forEach(s => this.services.get(s)?.remove(sender))
+        this.apps.removeSender(sender, state)
         statusState.setNeedsUpdate()
       })
       .listen(address, {
@@ -106,10 +107,33 @@ class Apps {
     if (!state) {
       state = { senders: new Set([sender]), header }
       this.states.set(header.path, state)
+      header.services = 1
       this.headers.push(header)
     } else {
+      const i = this.headers.findIndex(h => h.path === header.path)
+      if (i !== -1) this.headers[i].services = (this.headers[i].services ?? 0) + 1
       state.senders.add(sender)
     }
+  }
+  removeSender(sender: Sender, senderState: State) {
+    senderState.apps.forEach(path => {
+      this.removeOne(sender, path)
+    })
+    senderState.apps = new Set()
+  }
+  remove(sender: Sender, senderState: State, paths: string[]) {
+    for (const path of paths) {
+      if (!senderState.apps.has(path)) continue
+      senderState.apps.delete(path)
+      this.removeOne(sender, path)
+    }
+  }
+  removeOne(sender: Sender, path: string) {
+    let state: AppState | undefined = this.states.get(path)
+    if (!state) return
+    state.senders.delete(sender)
+    const i = this.headers.findIndex(h => h.path === path)
+    if (i !== -1) this.headers[i].services = Math.max((this.headers[i].services ?? 0) - 1, 0)
   }
 }
 interface AppState {
@@ -155,4 +179,5 @@ interface AppHeader {
   type: 'app'
   name: string
   path: string
+  services?: number
 }
