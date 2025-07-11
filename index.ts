@@ -3,13 +3,15 @@ import { LazyState } from 'channel/more'
 const paddr = (a?: string) => (a ? (isNaN(Number(a)) ? a : Number(a)) : 1997)
 
 interface State {
-  services: string[]
+  services: Set<string>
+  apps: Set<string>
   requests: number
 }
 let requests = 0
 export class Hub {
   services = new ObjectMap<string, Services>()
   channel = new Channel<State>()
+  apps = new Apps()
   constructor(address = paddr(Bun.env.HUBLISTEN)) {
     const statusState = new LazyState(() => ({
       requests,
@@ -17,9 +19,10 @@ export class Hub {
     }))
     const statusBadges = new LazyState<StatusBadges>(() => this.statusBadges)
     this.channel
-      .post('hub/service/update', ({ body: { add, remove }, sender }) => {
-        if (add && Array.isArray(add)) this.addServices(sender, add)
-        if (remove && Array.isArray(remove)) this.removeServices(sender, remove)
+      .post('hub/service/update', ({ body: { add, remove, addApps }, sender, state }) => {
+        if (add && Array.isArray(add)) this.addServices(sender, state, add)
+        if (remove && Array.isArray(remove)) this.removeServices(sender, state, remove)
+        if (addApps && Array.isArray(addApps)) this.apps.add(sender, state, addApps)
         statusState.setNeedsUpdate()
         statusBadges.setNeedsUpdate()
       })
@@ -51,16 +54,20 @@ export class Hub {
       })
       .listen(address, {
         state: () => ({
-          services: [],
+          services: new Set<string>(),
           requests: 0,
+          apps: new Set<string>(),
         }),
       })
   }
   stats() {
     this.services.map(a => a)
   }
-  addServices(sender: Sender, services: string[]) {
+  addServices(sender: Sender, state: State, services: string[]) {
+    state.services
     services.forEach(s => {
+      if (state.services.has(s)) return
+      state.services.add(s)
       let service = this.services.get(s)
       if (!service) {
         service = new Services(s)
@@ -70,16 +77,44 @@ export class Hub {
       console.log('Service', s, service.services.length)
     })
   }
-  removeServices(sender: Sender, services: string[]) {
+  removeServices(sender: Sender, state: State, services: string[]) {
     services.forEach(s => {
+      if (!state.services.has(s)) return
+      state.services.delete(s)
       let service = this.services.get(s)
       if (!service) return
       service.remove(sender)
     })
   }
   get statusBadges(): StatusBadges {
-    return { services: this.services.size }
+    return { services: this.services.size, apps: this.apps.headers }
   }
+}
+
+class Apps {
+  states = new ObjectMap<string, AppState>()
+  headers: AppHeader[] = []
+  add(sender: Sender, senderState: State, headers: AppHeader[]) {
+    headers.forEach(header => {
+      this.addOne(sender, senderState, header)
+    })
+  }
+  addOne(sender: Sender, senderState: State, header: AppHeader) {
+    if (senderState.apps.has(header.path)) return
+    senderState.apps.add(header.path)
+    let state: AppState | undefined = this.states.get(header.path)
+    if (!state) {
+      state = { senders: new Set([sender]), header }
+      this.states.set(header.path, state)
+      this.headers.push(header)
+    } else {
+      state.senders.add(sender)
+    }
+  }
+}
+interface AppState {
+  senders: Set<Sender>
+  header: AppHeader
 }
 
 function other(): boolean {
@@ -113,4 +148,15 @@ class Services {
 
 interface StatusBadges {
   services: number
+  apps: AppHeader[]
+}
+
+interface AppHeader {
+  type: 'app'
+  name: string
+  path: string
+}
+interface AppHeaderInfo {
+  services: number
+  header: AppHeader
 }
