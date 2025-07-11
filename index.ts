@@ -156,7 +156,3 @@ interface AppHeader {
   name: string
   path: string
 }
-interface AppHeaderInfo {
-  services: number
-  header: AppHeader
-}
