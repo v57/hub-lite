@@ -19,10 +19,11 @@ export class Hub {
     }))
     const statusBadges = new LazyState<StatusBadges>(() => this.statusBadges)
     this.channel
-      .post('hub/service/update', ({ body: { add, remove, addApps }, sender, state }) => {
+      .post('hub/service/update', ({ body: { add, remove, addApps, removeApps }, sender, state }) => {
         if (add && Array.isArray(add)) this.addServices(sender, state, add)
         if (remove && Array.isArray(remove)) this.removeServices(sender, state, remove)
         if (addApps && Array.isArray(addApps)) this.apps.add(sender, state, addApps)
+        if (removeApps && Array.isArray(removeApps)) this.apps.remove(sender, state, removeApps)
         statusState.setNeedsUpdate()
         statusBadges.setNeedsUpdate()
       })
