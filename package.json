@@ -6,10 +6,10 @@
     "start": "bun start.ts"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.9"
+    "@types/bun": "^1.3.11"
   },
   "peerDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.8.3"
   },
   "dependencies": {
     "channel": "v57/channel"
