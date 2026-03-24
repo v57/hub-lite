@@ -10,6 +10,11 @@ interface State {
   name?: string
   icon?: any
 }
+
+interface ServiceProvider {
+  id: string
+  name?: string
+}
 let requests = 0
 export class Hub {
   services = new ObjectMap<string, Services>()
@@ -17,6 +22,7 @@ export class Hub {
   apps = new Apps()
   api = new Set<string>()
   apiList = new LazyStates<State, string[]>(() => Array.from(this.api))
+  serviceProviders = new LazyStates<string, ServiceProvider[]>(path => this.serviceFor(path))
   constructor(address = paddr(Bun.env.HUBLISTEN)) {
     const services = this.services
     const statusState = new LazyState(() => ({
@@ -27,10 +33,15 @@ export class Hub {
     const sendUpdates = () => {
       statusState.setNeedsUpdate()
       statusBadges.setNeedsUpdate()
+      this.serviceProviders.setNeedsUpdate()
     }
     this.channel
       .post('hub/api', () => Array.from(this.api))
       .stream('hub/api', ({ state }) => this.apiList.makeIterator(state))
+      .stream('hub/api/services', ({ body }) => {
+        const path = typeof body === 'string' ? body : ''
+        return this.serviceProviders.makeIterator(path)
+      })
       .post('hub/profile/update', ({ body: { name, icon }, state }) => {
         if (icon) state.icon = icon
         if (name) state.name = name
@@ -106,6 +117,7 @@ export class Hub {
         this.apps.removeSender(sender, state)
         context.applyChanges()
         statusState.setNeedsUpdate()
+        this.serviceProviders.setNeedsUpdate()
         if (sendUpdates) statusBadges.setNeedsUpdate()
       })
       .listen(address, {
@@ -119,6 +131,10 @@ export class Hub {
   }
   stats() {
     this.services.map(a => a)
+  }
+  serviceFor(path: string): ServiceProvider[] {
+    if (!path || !this.api.has(path)) return []
+    return this.services.get(path)?.providers() ?? []
   }
   addServices(sender: Sender, state: State, services: string[], context: ServiceUpdateContext) {
     services.forEach(s => {
@@ -267,6 +283,20 @@ class Services {
       pending: this.pending.length,
       running: this.services.reduce((a, b) => a + b.sending.size + b.streams, 0),
     }
+  }
+  providers(): ServiceProvider[] {
+    return this.services
+      .map(service => ({
+        id: service.state.id,
+        name: service.state.name?.trim() || undefined,
+      }))
+      .sort((left, right) => {
+        const leftLabel = left.name ?? left.id
+        const rightLabel = right.name ?? right.id
+        const diff = leftLabel.localeCompare(rightLabel)
+        if (diff !== 0) return diff
+        return left.id.localeCompare(right.id)
+      })
   }
   completed(service: Service) {
     if (service.sending.size > 0 || this.pending.length === 0) return
