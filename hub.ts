@@ -73,10 +73,11 @@ export class Hub {
       })
       .stream('hub/status', () => statusState.makeIterator())
       .stream('hub/status/badges', () => statusBadges.makeIterator())
-      .postOther(other, async ({ body, path, task }) => {
+      .postOther(other, async ({ body, path, context, task }) => {
         const service = this.services.get(path)
         if (!service) throw 'api not found'
-        const s = await service.next()
+        const selected = typeof context?.service === 'string' ? service.select(context.service) : undefined
+        const s = selected ?? (await service.next())
         if (!s) throw 'api not found'
         if (task?.isCancelled) throw 'cancelled'
         service.requests += 1
@@ -92,10 +93,11 @@ export class Hub {
           service.completed(s)
         }
       })
-      .streamOther(other, async function* ({ body, path }) {
+      .streamOther(other, async function* ({ body, path, context }) {
         const service = services.get(path)
         if (!service) throw 'api not found'
-        const s = await service.next()
+        const selected = typeof context?.service === 'string' ? service.select(context.service) : undefined
+        const s = selected ?? (await service.next())
         if (!s) throw 'api not found'
         service.requests += 1
         requests += 1
@@ -237,6 +239,9 @@ class Services {
       this.enableServiceIfNeeded(context)
       if (this.pending.length) this.pending.shift()?.(service)
     }
+  }
+  select(serviceId: string): Service | undefined {
+    return this.services.find(service => service.state.id === serviceId)
   }
   remove(sender: Sender, context: ServiceUpdateContext) {
     const index = this.services.findIndex(a => a.sender === sender)
