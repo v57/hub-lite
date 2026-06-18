@@ -1,6 +1,17 @@
+<h1>
+  <img alt="Containerization logo" src="./icon.png" width="70" valign="middle">
+  &nbsp;hub-lite
+</h1>
+
 # Usage
 
 ## Start hub process
+
+```sh
+bunx v57/hub-lite
+```
+
+Our just use it in your project `bun add v57/hub-lite`
 
 ```ts
 import { Hub } from 'hub-lite'
