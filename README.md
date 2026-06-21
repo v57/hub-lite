@@ -1,24 +1,27 @@
 <h1>
   <img alt="Containerization logo" src="./icon.png" width="70" valign="middle">
-  &nbsp;hub-lite
+  &nbsp;Hub Lite Server
 </h1>
 
-# Usage
+`hub-lite` is a main server for your Hub network
 
-## Start hub process
+## Quick Start
+#### [Run from Hub cli](https://github.com/v57/hub)
 
+#### Run from Bun
 ```sh
 bunx v57/hub-lite
 ```
-
-Our just use it in your project `bun add v57/hub-lite`
-
-```ts
-import { Hub } from 'hub-lite'
-new Hub()
+#### Run from Source
+```sh
+bun i && bun .
 ```
 
+## Environment
+- `HUBLISTEN`: default listen address or port.
+
 ## Create hub service
+[TypeScript](https://github.com/v57/hub-service) [Swift](https://github.com/v57/HubService)
 
 ```ts
 import { Service } from 'hub-service'
@@ -28,17 +31,8 @@ new Service().post('hash/sha256', body => new Bun.SHA256().update(body).digest('
 ## Client api
 
 ```ts
-import { Client } from 'hub-client'
-const client = new Client()
-const hash = await client.post('hash/sha256', 'Hello World')
+import { Service } from 'hub-service'
+const service = new Service().start()
+const hash = await service.send('hash/sha256', 'Hello World')
 console.log(hash)
 ```
-
-# Security
-
-Hub lite doesn't have any built in security
-
-- Designed to run on isolated servers
-- Always listens to 127.0.0.1
-- Anyone who has access to Hub port can make a service
-- There is no authorization
